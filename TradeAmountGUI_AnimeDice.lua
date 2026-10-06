@@ -35,13 +35,24 @@
 
 ------------------------------------------------------------------
 -- SETTINGS
+-- ตั้งจาก one-liner ได้: getgenv().TradeGUIConfig = { ... } ก่อน loadstring
+-- (ไม่ตั้งก็ใช้ค่า default ด้านล่าง)
 ------------------------------------------------------------------
+local _U = (typeof(getgenv) == "function" and getgenv().TradeGUIConfig) or {}
+if type(_U) ~= "table" then _U = {} end
+local function pick(u, d) if u ~= nil then return u end return d end
+
 local CFG = {
-    OfferDelay   = 0.12,   -- หน่วงต่อการยิง +1 (ต้อง > 0.1 ของ debounce เซิร์ฟ) อย่าลดต่ำกว่า 0.11
-    AutoReady    = false,  -- true = ใส่ครบแล้วกด ready ให้เอง
-    AutoAccept   = false,  -- true = ตอนเข้า phase Confirm กด accept ให้เอง (ระวัง! ตรวจของอีกฝั่งเอง)
-    ShowUnits    = true,   -- โชว์ตัวละคร (Unit) ในตารางด้วย (unit = 1 ชิ้น/คีย์ ไม่ stack)
-    HideKey      = Enum.KeyCode.RightControl,
+    -- หน่วงต่อการยิง +1 (ต้อง > 0.1 ของ debounce เซิร์ฟ) อย่าลดต่ำกว่า 0.11
+    OfferDelay   = pick(_U.OfferDelay, 0.12),
+    -- true = ใส่ครบแล้วกด ready ให้เอง
+    AutoReady    = pick(_U.AutoReady, false),
+    -- true = ตอนเข้า phase Confirm กด accept ให้เอง (ระวัง! ตรวจของอีกฝั่งเอง)
+    AutoAccept   = pick(_U.AutoAccept, false),
+    -- โชว์ตัวละคร (Unit) ในตารางด้วย (unit = 1 ชิ้น/คีย์ ไม่ stack)
+    ShowUnits    = pick(_U.ShowUnits, true),
+    -- ปุ่มซ่อน/โชว์ GUI
+    HideKey      = pick(_U.HideKey, Enum.KeyCode.RightControl),
 }
 
 ------------------------------------------------------------------
