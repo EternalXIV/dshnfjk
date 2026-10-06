@@ -7,8 +7,7 @@
     สคริปต์นี้ = GUI ให้ "กรอกจำนวนที่อยากส่ง" แล้วมันยิงให้เองจนครบ
 
     ── ข้อเท็จจริงจากซอร์สเกม (ReplicatedStorage.Framework.Features.Trading) ──
-      ChangeOffer(key, amount) -> ส่งทีเดียวเต็มจำนวนได้ (เกม clamp ให้เท่าที่มีในกระเป๋า)
-          ถ้าของไม่เข้า ให้ตั้ง CFG.OfferMode = "loop" (ยิงทีละ +1 ช้าแต่ชัวร์)
+      ChangeOffer(key, amount) -> ส่งจำนวนที่กรอกไปตรงๆ ทีเดียว
       DebounceUtil.Try(player, "TradeChangeOffer", 0.1)
         -> ยิงถี่กว่า 0.1 วิ/ครั้ง จะถูกดรอป (OfferDelay 0.12 เผื่อไว้แล้ว)
       TradeClass.ChangeOffer -> ResetConfirmation()
@@ -38,8 +37,6 @@ if type(_U) ~= "table" then _U = {} end
 local function pick(u, d) if u ~= nil then return u end return d end
 
 local CFG = {
-    -- "bulk" = ยิงทีเดียวเต็มจำนวนตามที่กรอก | "loop" = ยิงทีละ +1 (ช้า สำรอง)
-    OfferMode    = pick(_U.OfferMode, "bulk"),
     -- หน่วงต่อการยิง 1 ครั้ง (เซิร์ฟ debounce 0.1 วิ อย่าลดต่ำกว่า 0.11)
     OfferDelay   = pick(_U.OfferDelay, 0.12),
     -- true = ใส่ครบแล้วกด ready ให้เอง
@@ -436,43 +433,25 @@ local function sendPlan()
         for _, p in ipairs(plan) do
             if ST.stopFlag or not ST.inTrade then break end
 
-            if CFG.OfferMode == "loop" then
-                -- ยิงทีละ +1 (ช้า · ใช้เมื่อ bulk ใช้ไม่ได้)
-                local guard = 0
-                while not ST.stopFlag and ST.inTrade do
-                    local cur = ST.ownOffer[p.key] or 0
-                    if cur >= p.target then break end
-                    if ST.phase == "Countdown" then
-                        task.wait(0.3)
-                    else
-                        pcall(function() rOffer:FireServer(p.key, 1) end)
-                        task.wait(CFG.OfferDelay)
-                        guard = guard + 1
-                        if guard % 10 == 0 then
-                            setProgress(("กำลังใส่... %s %s/%s")
-                                :format(p.name, fmt(ST.ownOffer[p.key] or 0), fmt(p.target)))
-                        end
-                        if guard > p.target * 3 + 30 then
-                            log(("⚠️ %s ใส่ไม่ขึ้น หยุดชนิดนี้ (ได้ %s/%s)")
-                                :format(p.name, fmt(ST.ownOffer[p.key] or 0), fmt(p.target)))
-                            break
-                        end
-                    end
-                end
-            else
-                -- ยิงทีเดียวเต็มจำนวนตามที่กรอก (เกม clamp ให้เท่าที่มีในกระเป๋า)
-                for _ = 1, 3 do
-                    if ST.stopFlag or not ST.inTrade then break end
-                    local need = p.target - (ST.ownOffer[p.key] or 0)
-                    if need <= 0 then break end
-                    if ST.phase == "Countdown" then
-                        task.wait(0.3)
-                    else
-                        setProgress(("ใส่ %s x%s..."):format(p.name, fmt(need)))
-                        pcall(function() rOffer:FireServer(p.key, need) end)
-                        task.wait(CFG.OfferDelay)
-                    end
-                end
+            -- รอให้พ้น Countdown ก่อน (เซิร์ฟไม่รับ ChangeOffer ตอนนั้น)
+            while not ST.stopFlag and ST.inTrade and ST.phase == "Countdown" do
+                task.wait(0.3)
+            end
+            if ST.stopFlag or not ST.inTrade then break end
+
+            -- ยิงจำนวนที่กรอกไปเลย
+            setProgress(("ใส่ %s x%s..."):format(p.name, fmt(p.target)))
+            pcall(function() rOffer:FireServer(p.key, p.target) end)
+            task.wait(CFG.OfferDelay)
+
+            -- ยังไม่ครบ -> ยิงเติมส่วนที่ขาด (จำนวนที่ขาด ไม่ใช่ 1)
+            for _ = 1, 2 do
+                if ST.stopFlag or not ST.inTrade then break end
+                local need = p.target - (ST.ownOffer[p.key] or 0)
+                if need <= 0 then break end
+                setProgress(("เติม %s x%s..."):format(p.name, fmt(need)))
+                pcall(function() rOffer:FireServer(p.key, need) end)
+                task.wait(CFG.OfferDelay)
             end
         end
 
@@ -496,7 +475,6 @@ local function sendPlan()
             setProgress(("⚠️ ใส่ได้ %s/%s ชิ้น — ไม่ครบ: %s")
                 :format(fmt(got), fmt(want), table.concat(miss, ", ")),
                 Color3.fromRGB(240, 200, 150))
-            log("ถ้าใส่ไม่ขึ้นเลย ลองตั้ง CFG.OfferMode = \"loop\" (ยิงทีละ 1)")
         else
             setProgress(("✅ ใส่ครบ %s ชิ้น แล้ว — กด READY ได้เลย"):format(fmt(got)))
             if CFG.AutoReady then
